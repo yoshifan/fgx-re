@@ -3,5 +3,5 @@
 *.notes
 fgx-checksum
 fgx-decompress-replay
-py/gui_config.json
+py/config.json
 __pycache__

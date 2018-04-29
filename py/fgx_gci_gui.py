@@ -22,6 +22,7 @@ from PyQt5.QtWidgets import (QApplication, QComboBox, QDialog,
     QDialogButtonBox, QFileDialog, QHBoxLayout, QLabel, QLayout, QLineEdit,
     QPushButton, QScrollArea, QTextEdit, QVBoxLayout, QWidget, QWidgetItem)
 
+from config import config
 from fgx_encode import decoder, encoder
 from fgx_format import gci
 from worker import WorkerThread
@@ -51,9 +52,6 @@ class MainWidget(QWidget):
 
     def __init__(self):
         super().__init__()
-
-        self.config_filename = Path('gui_config.json')
-        self.load_config()
 
         self.init_layout()
         self.output_filename_defaults = dict(
@@ -155,7 +153,7 @@ class MainWidget(QWidget):
         if folder:
             self.output_folder_label.setText(folder)
             self.output_folder_label.setToolTip(folder)
-            self.config['output_folder'] = folder
+            config.set('output_folder', folder)
 
     def run_worker_job(self, job_func):
         if not self.worker_thread:
@@ -171,7 +169,7 @@ class MainWidget(QWidget):
 
     def closeEvent(self, e):
         """Event handler: GUI window is closed"""
-        self.save_config()
+        config.save()
 
     def dragEnterEvent(self, e):
         """Event handler: Mouse enters the GUI window while dragging
@@ -259,11 +257,11 @@ class MainWidget(QWidget):
 
     @property
     def output_folder(self):
-        return self.config.get('output_folder', '')
+        return config.get('output_folder', '')
 
     @property
     def output_filename(self):
-        fn = self.config.get(f'output_filename_{self.output_type}')
+        fn = config.get(f'output_filename_{self.output_type}')
         if not fn:
             fn = self.output_filename_defaults[self.output_type]
         return fn
@@ -273,17 +271,20 @@ class MainWidget(QWidget):
         return Path(self.output_folder, self.output_filename)
 
     def on_output_type_change(self):
-        output_filename = self.config.get(
+        output_filename = config.get(
             f'output_filename_{self.output_type}', '')
         self.output_filename_line_edit.setText(output_filename)
         self.output_filename_line_edit.setPlaceholderText(
             self.output_filename_defaults[self.output_type])
 
     def on_output_filename_change(self):
-        self.config[f'output_filename_{self.output_type}'] = \
-            self.output_filename_line_edit.text()
+        config.set(
+            f'output_filename_{self.output_type}',
+            self.output_filename_line_edit.text())
 
     def on_output_button_click(self):
+        self.clear_error_display()
+
         if not self.output_folder:
             self.display_error("Please select an output folder.")
             return
@@ -329,17 +330,6 @@ class MainWidget(QWidget):
     def output_binary_file(self, bytes_to_write):
         with open(self.output_filepath, "wb") as output_file:
             output_file.write(bytes_to_write)
-
-    def load_config(self):
-        if self.config_filename.exists():
-            with open(self.config_filename, 'r') as config_file:
-                self.config = json.load(config_file)
-        else:
-            self.config = dict()
-
-    def save_config(self):
-        with open(self.config_filename, 'w') as config_file:
-            json.dump(self.config, config_file)
 
 
 class GCIFieldsWidget(QWidget):
