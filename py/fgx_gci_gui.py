@@ -20,7 +20,7 @@ import urllib.request
 from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QThread
 from PyQt5.QtWidgets import (QApplication, QComboBox, QDialog,
     QDialogButtonBox, QFileDialog, QHBoxLayout, QLabel, QLayout, QLineEdit,
-    QPushButton, QTextEdit, QVBoxLayout, QWidget, QWidgetItem)
+    QPushButton, QScrollArea, QTextEdit, QVBoxLayout, QWidget, QWidgetItem)
 
 from fgx_encode import decoder, encoder
 from fgx_format import gci
@@ -73,8 +73,17 @@ class MainWidget(QWidget):
         self.error_label.setStyleSheet("QLabel { color: red; }")
 
         self.input_gci_label = QLabel("Drag and drop a .gci to get started")
-        self.input_gci_label.setMinimumWidth(150)
+        # Given that we have word wrap True, setting a fixed height prevents
+        # the GUI from resizing (and prevents an associated window size warning
+        # in the console window) when we switch between long and short
+        # filepaths.
+        # To help with reading long filepaths, we'll also set a tooltip each
+        # time we set the filepath.
         self.input_gci_label.setWordWrap(True)
+        self.input_gci_label.setMinimumWidth(150)
+        self.input_gci_label.setFixedHeight(35)
+
+        self.input_gci_checksum_label = QLabel("")
 
         self.gci_fields_widget = GCIFieldsWidget()
 
@@ -93,8 +102,10 @@ class MainWidget(QWidget):
         self.output_folder_select_dialog = QFileDialog(
             self, "Choose folder to save to", self.output_folder)
         self.output_folder_label = QLabel(self.output_folder)
-        self.output_folder_label.setMinimumWidth(150)
+        self.output_folder_label.setToolTip(self.output_folder)
         self.output_folder_label.setWordWrap(True)
+        self.output_folder_label.setMinimumWidth(150)
+        self.output_folder_label.setFixedHeight(50)
         self.output_folder_select_button = QPushButton("Choose", self)
         self.output_folder_select_button.clicked.connect(
             self.show_output_folder_select_dialog)
@@ -124,6 +135,7 @@ class MainWidget(QWidget):
         vbox = QVBoxLayout()
         vbox.addWidget(self.error_label)
         vbox.addWidget(self.input_gci_label)
+        vbox.addWidget(self.input_gci_checksum_label)
         vbox.addWidget(self.gci_fields_widget)
         vbox.addWidget(self.output_vbox_widget)
         self.setLayout(vbox)
@@ -142,6 +154,7 @@ class MainWidget(QWidget):
             self, 'Choose folder')
         if folder:
             self.output_folder_label.setText(folder)
+            self.output_folder_label.setToolTip(folder)
             self.config['output_folder'] = folder
 
     def run_worker_job(self, job_func):
@@ -222,8 +235,9 @@ class MainWidget(QWidget):
 
     @pyqtSlot()
     def _after_gci_decode(self):
-        self.input_gci_label.setText(
-            f"Input: {self.input_gci_filepath}"
+        self.input_gci_label.setText(f"Input: {self.input_gci_filepath}")
+        self.input_gci_label.setToolTip(f"Input: {self.input_gci_filepath}")
+        self.input_gci_checksum_label.setText(
             f"\nChecksum: 0x{self.input_gci.get_checksum().hex()}")
 
         self.gci_fields_widget.add_fields()
@@ -336,7 +350,18 @@ class GCIFieldsWidget(QWidget):
 
     def init_layout(self):
         self.fields_vbox = QVBoxLayout()
-        self.setLayout(self.fields_vbox)
+
+        scrollable_box = QWidget()
+        scrollable_box.setLayout(self.fields_vbox)
+
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setWidget(scrollable_box)
+        scroll_area.setFixedSize(300, 200)
+
+        vbox = QVBoxLayout()
+        vbox.addWidget(scroll_area)
+        self.setLayout(vbox)
 
     def add_fields(self):
         self.fields = [
