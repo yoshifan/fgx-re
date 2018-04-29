@@ -17,8 +17,7 @@ import sys
 import urllib.parse
 import urllib.request
 
-from PyQt5.QtCore import pyqtSignal, pyqtSlot, QFile, QObject, Qt, QThread
-from PyQt5.QtGui import QIcon, QTextCursor
+from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QThread
 from PyQt5.QtWidgets import (QApplication, QComboBox, QDialog,
     QDialogButtonBox, QFileDialog, QHBoxLayout, QLabel, QLayout, QLineEdit,
     QPushButton, QTextEdit, QVBoxLayout, QWidget, QWidgetItem)
@@ -26,6 +25,24 @@ from PyQt5.QtWidgets import (QApplication, QComboBox, QDialog,
 from fgx_encode import decoder, encoder
 from fgx_format import gci
 from worker import WorkerThread
+
+
+def clear_qlayout(layout):
+    """
+    Removes all elements from a QLayout.
+    General idea from https://stackoverflow.com/a/25330164/
+    Except this also goes recursively through QLayouts within
+    QLayouts.
+    """
+    while not layout.isEmpty():
+        layout_item = layout.takeAt(0)
+        if isinstance(layout_item, QLayout):
+            clear_qlayout(layout_item)
+            child = layout_item
+        elif isinstance(layout_item, QWidgetItem):
+            child = layout_item.widget()
+        layout.removeItem(layout_item)
+        child.setParent(None)
 
 
 class MainWidget(QWidget):
@@ -59,7 +76,7 @@ class MainWidget(QWidget):
         self.input_gci_label.setMinimumWidth(150)
         self.input_gci_label.setWordWrap(True)
 
-        self.fields_vbox = QVBoxLayout()
+        self.gci_fields_widget = GCIFieldsWidget()
 
         self.output_button = QPushButton("Output", self)
         self.output_button.clicked.connect(self.on_output_button_click)
@@ -107,7 +124,7 @@ class MainWidget(QWidget):
         vbox = QVBoxLayout()
         vbox.addWidget(self.error_label)
         vbox.addWidget(self.input_gci_label)
-        vbox.addLayout(self.fields_vbox)
+        vbox.addWidget(self.gci_fields_widget)
         vbox.addWidget(self.output_vbox_widget)
         self.setLayout(vbox)
 
@@ -149,7 +166,11 @@ class MainWidget(QWidget):
         e.accept()
 
     def dropEvent(self, e):
-        """Event handler: Mouse is released on the GUI window after dragging"""
+        """
+        Event handler: Mouse is released on the GUI window after dragging.
+
+        Check that we've dragged a single .gci file. If so, process it.
+        """
         self.clear_error_display()
 
         mime_data = e.mimeData()
@@ -170,78 +191,14 @@ class MainWidget(QWidget):
         #   with unescaped Unicode characters.
         # - Strip the beginning slash if it's a Windows filepath.
         #   (/D:/Games/... -> D:\Games\...)
-        self.input_gci_filepath = Path(urllib.request.url2pathname(uri.path))
+        input_gci_filepath = Path(urllib.request.url2pathname(uri.path))
+        if input_gci_filepath.suffix != '.gci':
+            self.display_error(
+                "The dropped file doesn't seem to be a .gci.")
+            return
 
+        self.input_gci_filepath = input_gci_filepath
         self.process_input_gci()
-
-    def sixteen_bytes_to_hex_str(self, bytes_to_write):
-        """
-        Takes an iterable of up to 16 bytes, and returns a string like:
-        47 46 5A 45 38 50 FF 02   66 7A 72 30 30 30 30 41
-        """
-        bytes_0_to_7 = ' '.join([format(b, '02X') for b in bytes_to_write[:8]])
-        if len(bytes_to_write) > 8:
-            bytes_8_to_f = ' '.join(
-                [format(b, '02X') for b in bytes_to_write[8:]])
-            return f"{bytes_0_to_7}   {bytes_8_to_f}"
-        else:
-            return bytes_0_to_7
-
-    def write_16_bytes_per_line(self, bytes_to_write, text_edit):
-        current_line_bytes = []
-        for b in bytes_to_write:
-            current_line_bytes.append(b)
-            if len(current_line_bytes) == 16:
-                text_edit.append(
-                    self.sixteen_bytes_to_hex_str(current_line_bytes))
-                current_line_bytes = []
-        # Write the last partial line, if any
-        if current_line_bytes:
-            text_edit.append(self.sixteen_bytes_to_hex_str(current_line_bytes))
-
-    def get_field_value(self, field):
-        if field['access_type'] == 'top_level':
-            return getattr(self.replay, field['key'])
-        elif field['access_type'] == 'player_array_dict':
-            # This only gets the value for element 0.
-            # There should be a way to get for any element. The UI would
-            # probably involve a dropdown to select which element we want.
-            return self.replay.player_array_dict[0][field['key']]
-
-    def set_field_value(self, field, new_value):
-        if field['access_type'] == 'top_level':
-            setattr(self.replay, field['key'], new_value)
-        elif field['access_type'] == 'player_array_dict':
-            # This only sets the value for element 0.
-            # There should be a way to set for any element.
-            self.replay.player_array_dict[0][field['key']] = new_value
-
-    def on_field_edit(self, field_key):
-        field = self.field_lookup[field_key]
-        text = field['line_edit'].text()
-        try:
-            # This assumes an integer field. We may add more data types later.
-            self.set_field_value(field, int(text))
-        except ValueError:
-            # Typed value is invalid. Revert to the original value.
-            field['line_edit'].setText(str(self.get_field_value(field)))
-
-    def clear_qlayout(self, layout):
-        """
-        Removes all elements from a QLayout.
-        General idea from https://stackoverflow.com/a/25330164/
-        Except this also goes recursively through QLayouts within
-        QLayouts.
-        """
-        while not layout.isEmpty():
-            layout_item = layout.takeAt(0)
-            if isinstance(layout_item, QLayout):
-                self.clear_qlayout(layout_item)
-                child = layout_item
-            elif isinstance(layout_item, QWidgetItem):
-                child = layout_item.widget()
-            layout.removeItem(layout_item)
-            child.setParent(None)
 
     def process_input_gci(self):
         self.input_gci_label.setText("Working...")
@@ -255,6 +212,12 @@ class MainWidget(QWidget):
         my_decoder = decoder(self.input_gci.get_replay_data())
         # Get the decoded data
         self.replay = my_decoder.dump()
+        # The main widget needs the replay object to eventually pass to
+        # the GCI encoder.
+        # The fields widget also needs the replay object, to access its
+        # replay fields.
+        # Might not be the cleanest separation here right now.
+        self.gci_fields_widget.replay = self.replay
         self.after_gci_decode.emit()
 
     @pyqtSlot()
@@ -263,51 +226,7 @@ class MainWidget(QWidget):
             f"Input: {self.input_gci_filepath}"
             f"\nChecksum: 0x{self.input_gci.get_checksum().hex()}")
 
-        self.fields = [
-            dict(
-                key='course_id', name="Course ID",
-                access_type='top_level'),
-            dict(
-                key='player_array_entries', name="Player Array entries",
-                access_type='top_level'),
-            dict(
-                key='total_frames', name="Total frames",
-                access_type='top_level'),
-            dict(
-                key='char_id', name="Machine ID",
-                access_type='player_array_dict'),
-            dict(
-                key='member_0x2', name="0x2",
-                access_type='player_array_dict'),
-            dict(
-                key='accel_speed_slider', name="Accel/maxspeed slider",
-                access_type='player_array_dict'),
-            dict(
-                key='member_0x4', name="0x4",
-                access_type='player_array_dict'),
-            dict(
-                key='is_custom_ship', name="Custom boolean",
-                access_type='player_array_dict'),
-        ]
-
-        self.field_lookup = dict([(d['key'], d) for d in self.fields])
-        # Clear elements from previous input GCIs.
-        self.clear_qlayout(self.fields_vbox)
-
-        for field in self.fields:
-            label = QLabel(field['name'])
-            label.setMinimumWidth(150)
-
-            line_edit = QLineEdit()
-            line_edit.setText(str(self.get_field_value(field)))
-            callback = functools.partial(self.on_field_edit, field['key'])
-            line_edit.editingFinished.connect(callback)
-            field['line_edit'] = line_edit
-
-            field_hbox = QHBoxLayout()
-            field_hbox.addWidget(label)
-            field_hbox.addWidget(line_edit)
-            self.fields_vbox.addLayout(field_hbox)
+        self.gci_fields_widget.add_fields()
 
         self.output_filename_defaults = dict(
             gci='output.gci',
@@ -407,6 +326,116 @@ class MainWidget(QWidget):
     def save_config(self):
         with open(self.config_filename, 'w') as config_file:
             json.dump(self.config, config_file)
+
+
+class GCIFieldsWidget(QWidget):
+
+    def __init__(self):
+        super().__init__()
+        self.init_layout()
+
+    def init_layout(self):
+        self.fields_vbox = QVBoxLayout()
+        self.setLayout(self.fields_vbox)
+
+    def add_fields(self):
+        self.fields = [
+            dict(
+                key='course_id', name="Course ID",
+                access_type='top_level'),
+            dict(
+                key='player_array_entries', name="Player Array entries",
+                access_type='top_level'),
+            dict(
+                key='total_frames', name="Total frames",
+                access_type='top_level'),
+            dict(
+                key='char_id', name="Machine ID",
+                access_type='player_array_dict'),
+            dict(
+                key='member_0x2', name="0x2",
+                access_type='player_array_dict'),
+            dict(
+                key='accel_speed_slider', name="Accel/maxspeed slider",
+                access_type='player_array_dict'),
+            dict(
+                key='member_0x4', name="0x4",
+                access_type='player_array_dict'),
+            dict(
+                key='is_custom_ship', name="Custom boolean",
+                access_type='player_array_dict'),
+        ]
+
+        self.field_lookup = dict([(d['key'], d) for d in self.fields])
+        # Clear elements from previous input GCIs.
+        clear_qlayout(self.fields_vbox)
+
+        for field in self.fields:
+            label = QLabel(field['name'])
+            label.setMinimumWidth(150)
+
+            line_edit = QLineEdit()
+            line_edit.setText(str(self.get_field_value(field)))
+            callback = functools.partial(self.on_field_edit, field['key'])
+            line_edit.editingFinished.connect(callback)
+            field['line_edit'] = line_edit
+
+            field_hbox = QHBoxLayout()
+            field_hbox.addWidget(label)
+            field_hbox.addWidget(line_edit)
+            self.fields_vbox.addLayout(field_hbox)
+
+    def get_field_value(self, field):
+        if field['access_type'] == 'top_level':
+            return getattr(self.replay, field['key'])
+        elif field['access_type'] == 'player_array_dict':
+            # This only gets the value for element 0.
+            # There should be a way to get for any element. The UI would
+            # probably involve a dropdown to select which element we want.
+            return self.replay.player_array_dict[0][field['key']]
+
+    def set_field_value(self, field, new_value):
+        if field['access_type'] == 'top_level':
+            setattr(self.replay, field['key'], new_value)
+        elif field['access_type'] == 'player_array_dict':
+            # This only sets the value for element 0.
+            # There should be a way to set for any element.
+            self.replay.player_array_dict[0][field['key']] = new_value
+
+    def on_field_edit(self, field_key):
+        field = self.field_lookup[field_key]
+        text = field['line_edit'].text()
+        try:
+            # This assumes an integer field. We may add more data types later.
+            self.set_field_value(field, int(text))
+        except ValueError:
+            # Typed value is invalid. Revert to the original value.
+            field['line_edit'].setText(str(self.get_field_value(field)))
+
+    def sixteen_bytes_to_hex_str(self, bytes_to_write):
+        """
+        Takes an iterable of up to 16 bytes, and returns a string like:
+        47 46 5A 45 38 50 FF 02   66 7A 72 30 30 30 30 41
+        """
+        bytes_0_to_7 = ' '.join([format(b, '02X') for b in bytes_to_write[:8]])
+        if len(bytes_to_write) > 8:
+            bytes_8_to_f = ' '.join(
+                [format(b, '02X') for b in bytes_to_write[8:]])
+            return f"{bytes_0_to_7}   {bytes_8_to_f}"
+        else:
+            return bytes_0_to_7
+
+    def write_16_bytes_per_line(self, bytes_to_write, text_edit):
+        current_line_bytes = []
+        for b in bytes_to_write:
+            current_line_bytes.append(b)
+            if len(current_line_bytes) == 16:
+                text_edit.append(
+                    self.sixteen_bytes_to_hex_str(current_line_bytes))
+                current_line_bytes = []
+        # Write the last partial line, if any
+        if current_line_bytes:
+            text_edit.append(self.sixteen_bytes_to_hex_str(current_line_bytes))
 
 
 # This is true when calling from command line.
