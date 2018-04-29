@@ -25,9 +25,12 @@ from PyQt5.QtWidgets import (QApplication, QComboBox, QDialog,
 
 from fgx_encode import decoder, encoder
 from fgx_format import gci
+from worker import WorkerThread
 
 
 class MainWidget(QWidget):
+
+    after_gci_decode = pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -40,6 +43,9 @@ class MainWidget(QWidget):
             gci='',
             replay_array='',
         )
+
+        self.worker_thread = None
+        self.after_gci_decode.connect(self._after_gci_decode)
 
         # Accept drag and drop; see event methods for details
         self.setAcceptDrops(True)
@@ -121,6 +127,18 @@ class MainWidget(QWidget):
             self.output_folder_label.setText(folder)
             self.config['output_folder'] = folder
 
+    def run_worker_job(self, job_func):
+        if not self.worker_thread:
+            # Create a thread.
+            # Must store a reference to the thread in a non-local variable,
+            # so the thread doesn't get garbage collected after returning
+            # from this method
+            # https://stackoverflow.com/a/15702922/
+            self.worker_thread = WorkerThread()
+
+        # This will emit 'started' and start running the thread
+        self.worker_thread.run_job(job_func)
+
     def closeEvent(self, e):
         """Event handler: GUI window is closed"""
         self.save_config()
@@ -152,18 +170,9 @@ class MainWidget(QWidget):
         #   with unescaped Unicode characters.
         # - Strip the beginning slash if it's a Windows filepath.
         #   (/D:/Games/... -> D:\Games\...)
-        input_filepath = Path(urllib.request.url2pathname(uri.path))
+        self.input_gci_filepath = Path(urllib.request.url2pathname(uri.path))
 
-        self.input_gci_label.setText(f"Input: {input_filepath}")
-
-        self.output_filename_defaults = dict(
-            gci='output.gci',
-            replay_array=f'{input_filepath.stem}__replay_array.bin',
-        )
-        self.output_vbox_widget.show()
-        self.on_output_type_change()
-
-        self.process_input_gci(input_filepath)
+        self.process_input_gci()
 
     def sixteen_bytes_to_hex_str(self, bytes_to_write):
         """
@@ -234,15 +243,25 @@ class MainWidget(QWidget):
             layout.removeItem(layout_item)
             child.setParent(None)
 
-    def process_input_gci(self, input_filepath):
-        self.input_gci = gci(input_filepath)
-        self.input_gci_label.setText(
-            f"{self.input_gci_label.text()}"
-            f"\nChecksum: 0x{self.input_gci.get_checksum().hex()}")
-        # Decode the replay data
+    def process_input_gci(self):
+        self.input_gci_label.setText("Working...")
+        self.input_gci = gci(self.input_gci_filepath)
+
+        # Decode the GCI.
+        # This call can take a while, especially with custom machines.
+        self.run_worker_job(self.decode_gci)
+
+    def decode_gci(self):
         my_decoder = decoder(self.input_gci.get_replay_data())
         # Get the decoded data
         self.replay = my_decoder.dump()
+        self.after_gci_decode.emit()
+
+    @pyqtSlot()
+    def _after_gci_decode(self):
+        self.input_gci_label.setText(
+            f"Input: {self.input_gci_filepath}"
+            f"\nChecksum: 0x{self.input_gci.get_checksum().hex()}")
 
         self.fields = [
             dict(
@@ -272,7 +291,7 @@ class MainWidget(QWidget):
         ]
 
         self.field_lookup = dict([(d['key'], d) for d in self.fields])
-        # Clear elements from previous input GCIs
+        # Clear elements from previous input GCIs.
         self.clear_qlayout(self.fields_vbox)
 
         for field in self.fields:
@@ -289,6 +308,13 @@ class MainWidget(QWidget):
             field_hbox.addWidget(label)
             field_hbox.addWidget(line_edit)
             self.fields_vbox.addLayout(field_hbox)
+
+        self.output_filename_defaults = dict(
+            gci='output.gci',
+            replay_array=f'{self.input_gci_filepath.stem}__replay_array.bin',
+        )
+        self.output_vbox_widget.show()
+        self.on_output_type_change()
 
     @property
     def output_type(self):
