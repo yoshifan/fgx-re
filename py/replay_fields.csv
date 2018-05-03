@@ -1,0 +1,56 @@
+parent,key,label,data_type,bits,reads,condition,length,notes
+,timestamp_byte,Timestamp byte,int,8,,,,
+,racer_array_type,Racer Array type,int,7,,,,
+,course_id,Course ID,int,6,,,,
+,unknown_4,Unknown 4,hex,32,,,,
+,unknown_5,Unknown 5,hex,32,,,,
+,racer_array_element_count,Racer Array element count,int,5,,,,
+,unknown_7,Unknown 7,int,3,,,,
+,unknown_8,Unknown 8,int,2,,,,
+,unknown_9,Unknown 9,int,1,,,,
+,unknown_10,Unknown 10,int,7,,,,
+,racer_array,Racer Array,array,,,,racer_array_element_count,
+racer_array,is_human,"Human 1, CPU 0",int,1,,,,
+racer_array,machine_id,Machine ID,int,6,,,,
+racer_array,unknown_13,Unknown 13,int,5,,racer_array_type >= 4,,
+racer_array,accel_maxspeed_slider,Accel/maxspeed slider,int,7,,racer_array_type >= 3,,
+racer_array,unknown_15,Unknown 15,int,2,,is_human == 1,,
+racer_array,unknown_16,Unknown 16,int,7,,is_human == 1 and racer_array_type <= 1,,
+racer_array,is_custom,"Custom 1, Non-custom 0",int,1,,is_human == 1,,
+racer_array,custom_machine_data_array,Custom machine data array,hex,8,33216,is_human == 1 and is_custom == 1,,
+,unknown_one_bit_array,Unknown One-Bit Array,array,,,racer_array_type >= 5,1,Thought the length was racer_array_element_count but maybe it's just 1?
+unknown_one_bit_array,unknown_20,Unknown 20,int,1,,,,
+,unknown_two_bit_array,Unknown Two-Bit Array,array,,,,1,Thought the length was racer_array_element_count but maybe it's just 1?
+unknown_two_bit_array,unknown_22,Unknown 22,int,2,,,,
+,total_frames,Total frames,int,20,,racer_array_type >= 5,,
+,unknown_array_element_count,Unknown Array element count,int,8,,,,
+,unknown_array,Unknown Array,array,,,,unknown_array_element_count,Always 4 elements. Replay checkpoints?
+unknown_array,unknown_26,Unknown 26,int,14,,,,Frame number? 1st seems to always be 182. 2nd-4th seem to be random within the middle of the race.
+unknown_array,unknown_27,Unknown 27,int,14,,,,"Often same as above, other times a little different, like in GPI 2'10""174 Cosmic Star-G4 (yoshifan), LLC GP Sonic Phantom (yoshifan)"
+unknown_array,unknown_28,Unknown 28,int,4,,,,
+unknown_array,unknown_29,Unknown 29,int,5,,,,These 5 fields are more interesting in GP replays
+unknown_array,unknown_30,Unknown 30,int,5,,,,
+unknown_array,unknown_31,Unknown 31,int,5,,,,
+unknown_array,unknown_32,Unknown 32,int,5,,,,
+unknown_array,unknown_33,Unknown 33,int,5,,,,
+unknown_array,unknown_34,Unknown 34,hex,32,,,,"These 12 fields seem to have X,Y,Z positions? Don't know why there are 4 XYZ positions though. Often all 4 positions are the same, other times some are different, like in the same examples where the frame numbers are different."
+unknown_array,unknown_35,Unknown 35,hex,32,,,,
+unknown_array,unknown_36,Unknown 36,hex,32,,,,
+unknown_array,unknown_37,Unknown 37,hex,32,,,,
+unknown_array,unknown_38,Unknown 38,hex,32,,,,
+unknown_array,unknown_39,Unknown 39,hex,32,,,,
+unknown_array,unknown_40,Unknown 40,hex,32,,,,
+unknown_array,unknown_41,Unknown 41,hex,32,,,,
+unknown_array,unknown_42,Unknown 42,hex,32,,,,
+unknown_array,unknown_43,Unknown 43,hex,32,,,,
+unknown_array,unknown_44,Unknown 44,hex,32,,,,
+unknown_array,unknown_45,Unknown 45,hex,32,,,,
+,replay_array_element_count,Replay Array element count,int,14,,,,
+,replay_array,Replay Array,array,,,,replay_array_element_count + 1,"The ""+ 1"" on the length means that 0 on that value means 1 length, 5 on that value means 6 length, etc. Frame count behaves the same."
+replay_array,replay_element_buttons,Buttons,hex,8,,,,"0x04 with nothing, 0x14 with L+R, 0x44 with boost."
+replay_array,replay_element_strafe,Strafe,int,8,,,,
+replay_array,replay_element_accel,Accel,int,7,,,,
+replay_array,replay_element_brake,Brake,int,7,,,,
+replay_array,replay_element_frames,Frames,int,8,,,,"Frame count on this set of inputs, minus 1. So if this value is 2, then it actually means 3 frames."
+replay_array,replay_element_steer_x,Steer X,int,8,,,,
+replay_array,replay_element_steer_y,Steer Y,int,8,,,,
