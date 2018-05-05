@@ -432,12 +432,6 @@ class GCIFieldsWidget(QWidget):
                 raise ValueError(
                     f"Field '{field['key']}' has {number_of_bits} bits."
                     " The number should be positive.")
-            if number_of_bits > 32:
-                raise ValueError(
-                    f"Field '{field['key']}' has {number_of_bits} bits."
-                    " The number should be 32 or less. Note that this should"
-                    " be the number of bits in a single read. A single field"
-                    " might do multiple reads.")
 
         if field['data_type'] == 'hex':
 
@@ -445,15 +439,10 @@ class GCIFieldsWidget(QWidget):
                 values_dict[field['key']] = None
                 return
 
-            if field.get('reads'):
-                number_of_reads = int(field['reads'])
-            else:
-                number_of_reads = 1
-            bit_generator = self.generate_gci_bits_by_set(
-                number_of_bits, number_of_reads)
+            input_bits = self.generate_x_gci_bits(number_of_bits)
             bits = []
             byte_array = []
-            for bit in bit_generator:
+            for bit in input_bits:
                 bits.append(bit)
                 if len(bits) == 8:
                     byte_array.append(self.eight_bits_to_byte(bits))
@@ -473,7 +462,7 @@ class GCIFieldsWidget(QWidget):
                 values_dict[field['key']] = None
                 return
 
-            bits = self.read_bits_from_input(number_of_bits)
+            bits = self.generate_x_gci_bits(number_of_bits)
             byte_binary_str = ''.join([str(bit) for bit in bits])
             values_dict[field['key']] = int(byte_binary_str, base=2)
 
@@ -530,22 +519,18 @@ class GCIFieldsWidget(QWidget):
         byte_binary_str = ''.join([str(bit) for bit in bit_list])
         return int(byte_binary_str, base=2)
 
-    def generate_gci_bits_by_set(self, bits_per_set, number_of_sets):
-        for i in range(number_of_sets):
-            bit_set = self.read_bits_from_input(bits_per_set)
-            for bit in bit_set:
-                yield bit
-
-    def read_bits_from_input(self, number_of_bits):
-        return [next(self.gci_bit_generator) for i in range(number_of_bits)]
+    def generate_x_gci_bits(self, number_of_bits):
+        for i in range(number_of_bits):
+            yield next(self.gci_bit_generator)
 
     @staticmethod
-    def generate_gci_bits(input_data):
+    def generate_gci_bits(byte_array):
         """
-        Generator function to get the input GCI's bits. Reads bytes in order,
-        reads bits in reverse order (least to most significant).
+        Generator function to get a byte array's bits.
+        Following the replay GCI's decoding scheme, this reads bytes in
+        order, and reads bits in reverse order (least to most significant).
         """
-        for byte in input_data:
+        for byte in byte_array:
             for i in range(8):
                 yield (byte >> i) & 1
 
@@ -584,7 +569,7 @@ class GCIFieldsWidget(QWidget):
         if field['data_type'] == 'hex':
 
             output_bits = []
-            bits_remaining = int(field['bits']) * int(field.get('reads') or 1)
+            bits_remaining = int(field['bits'])
             # value is a byte array
             for byte_value in value:
                 bits_this_time = min(bits_remaining, 8)
@@ -640,7 +625,7 @@ class GCIFieldsWidget(QWidget):
         elif field['data_type'] == 'hex':
 
             text_edit = QTextEdit()
-            bit_count = int(field['bits']) * int(field.get('reads') or 1)
+            bit_count = int(field['bits'])
             line_count = math.ceil(bit_count / (8*16))
             text_edit.setFixedHeight(min(line_count * 26, 250))
             field['edit_widget'] = text_edit

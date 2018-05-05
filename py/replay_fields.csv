@@ -3,21 +3,21 @@ parent,key,label,data_type,bits,reads,condition,length,notes
 ,racer_array_type,Racer Array type,int,7,,,,
 ,course_id,Course ID,int,6,,,,
 ,unknown_4,Unknown 4,hex,32,,,,
-,unknown_5,Unknown 5,hex,32,,,,
+,unknown_5,Unknown 5,hex,32,,,,First 2 bytes here are frequently (but not always) CA E8.
 ,racer_array_element_count,Racer Array element count,int,5,,,,
-,unknown_7,Unknown 7,int,3,,,,
-,unknown_8,Unknown 8,int,2,,,,
-,unknown_9,Unknown 9,int,1,,,,
-,unknown_10,Unknown 10,int,7,,,,
+,gp_difficulty,GP difficulty,int,3,,,,"Novice 0, Standard 1, Expert 2, Master 3. Time Attack gets 1."
+,game_mode,"Game mode (GP 1, TA 2)",int,2,,,,
+,unknown_9,Unknown 9,int,1,,,,Always 0 for replays?
+,unknown_10,Unknown 10,int,7,,,,Always 3 for replays?
 ,racer_array,Racer Array,array,,,,racer_array_element_count,
 racer_array,is_human,"Human 1, CPU 0",int,1,,,,
 racer_array,machine_id,Machine ID,int,6,,,,
-racer_array,unknown_13,Unknown 13,int,5,,racer_array_type >= 4,,
+racer_array,unknown_machine_index,Unknown machine index,int,5,,racer_array_type >= 4,,"Time Attack: always 0? GP first track of a cup: 1, 2, 3, 4, 5, ..., 29, 0 when scrolling through the racers. GP not first track of a cup: numbers 0 to 29, but scrambled this time. Don't know what the number actually represents; it's not the machine's position in the starting grid."
 racer_array,accel_maxspeed_slider,Accel/maxspeed slider,int,7,,racer_array_type >= 3,,
-racer_array,unknown_15,Unknown 15,int,2,,is_human == 1,,
+racer_array,color_swap,Color swap,int,2,,is_human == 1,,Default color is 0. Press L on the machine settings screen to go 0 -> 1 -> 2 -> 3 -> 0.
 racer_array,unknown_16,Unknown 16,int,7,,is_human == 1 and racer_array_type <= 1,,
 racer_array,is_custom,"Custom 1, Non-custom 0",int,1,,is_human == 1,,
-racer_array,custom_machine_data_array,Custom machine data array,hex,8,33216,is_human == 1 and is_custom == 1,,
+racer_array,custom_machine_data,Custom machine data,hex,265728,,is_human == 1 and is_custom == 1,,"Last 8 words might be: pilot ID, body ID, body color, cockpit ID, cockpit color, booster ID, booster color, ?"
 ,unknown_one_bit_array,Unknown One-Bit Array,array,,,racer_array_type >= 5,1,Thought the length was racer_array_element_count but maybe it's just 1?
 unknown_one_bit_array,unknown_20,Unknown 20,int,1,,,,
 ,unknown_two_bit_array,Unknown Two-Bit Array,array,,,,1,Thought the length was racer_array_element_count but maybe it's just 1?
