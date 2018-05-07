@@ -1,0 +1,2 @@
+class FieldSpecError(Exception):
+    pass
