@@ -142,6 +142,13 @@ class Field():
         return byte_array
 
     @staticmethod
+    def bytes_to_bits(byte_array):
+        for byte in byte_array:
+            byte_as_binary_str = format(byte, f'08b')
+            for bit in byte_as_binary_str:
+                yield bit
+
+    @staticmethod
     def eight_bits_to_byte(bit_list):
         byte_binary_str = ''.join([str(bit) for bit in bit_list])
         return int(byte_binary_str, base=2)
@@ -241,7 +248,7 @@ class IntField(ValueField):
         if value < 0 or value > max_value:
             raise ValueError(
                 f"Got a value which is out of the valid 0-{max_value} range:"
-                f" {byte_value}")
+                f" {value}")
         return value
 
 
@@ -264,7 +271,7 @@ class FloatField(ValueField):
 
         byte_iterable = struct.pack('!f', value)
         bit_list = [
-            str(bit) for bit in self.generate_bits_from_bytes(byte_iterable)]
+            str(bit) for bit in self.bytes_to_bits(byte_iterable)]
         return bit_list
 
     def value_to_str(self, value):
@@ -277,7 +284,10 @@ class FloatField(ValueField):
         float_value = float(text)
 
         # Round to the nearest 32-bit float by packing and unpacking
-        bytes_obj = struct.pack('!f', float_value)
+        try:
+            bytes_obj = struct.pack('!f', float_value)
+        except OverflowError:
+            raise ValueError(f"Float is too large for 32 bits: {float_value}")
         float_value = struct.unpack('!f', bytes_obj)[0]
         return float_value
 
@@ -292,7 +302,7 @@ class HexField(ValueField):
             return []
 
         # value is a byte array
-        bit_generator = self.generate_bits_from_bytes(value)
+        bit_generator = self.bytes_to_bits(value)
         try:
             output_bits = [next(bit_generator) for i in range(self.bit_count)]
         except StopIteration:
@@ -336,13 +346,6 @@ class HexField(ValueField):
                     f" {byte_value}")
             byte_values.append(byte_value)
         return byte_values
-
-    @staticmethod
-    def generate_bits_from_bytes(byte_array):
-        for byte in byte_array:
-            byte_as_binary_str = format(byte, f'08b')
-            for bit in byte_as_binary_str:
-                yield bit
 
     @staticmethod
     def sixteen_bytes_to_hex_str(byte_values):
